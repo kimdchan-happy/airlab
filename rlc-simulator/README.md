@@ -9,13 +9,43 @@ Electron Devices*, vol. 57, no. 1, pp. 256–262, Jan. 2010.
 
 ## 실행 방법
 
-정적 파일이라 빌드는 필요 없지만, ES 모듈(`import`)을 쓰기 때문에 `file://`로 직접 열면
-브라우저 CORS 정책에 막힙니다. 반드시 로컬 웹서버로 띄워서 여세요.
+### 방법 A: 단일 HTML 파일 (서버 불필요, 추천)
+`tsv-rlc-simulator-standalone.html` 하나만 있으면 됩니다. Plotly.js와 physics.js/app.js가
+모두 이 파일 안에 인라인되어 있어 더블클릭으로 열거나 `file://` 경로로 브라우저에 바로
+드래그해도 그대로 동작합니다. 인터넷 연결도 필요 없습니다.
+
+### 방법 B: 소스 파일 그대로 (개발용)
+`index.html`/`app.js`/`physics.js`는 ES 모듈(`import`)로 분리되어 있어 `file://`로 직접
+열면 브라우저 CORS 정책에 막힙니다. 로컬 웹서버로 띄워서 여세요.
 
 ```bash
 cd rlc-simulator
 python3 -m http.server 8000
 # 브라우저에서 http://localhost:8000 접속
+```
+
+`tsv-rlc-simulator-standalone.html`은 `index.html`/`style.css`/`physics.js`/`app.js`/
+`vendor/plotly.min.js`를 하나로 합쳐 생성한 빌드 산출물입니다. 소스 파일을 수정했다면
+아래로 다시 생성하세요:
+
+```bash
+cd rlc-simulator
+python3 - <<'PY'
+import re
+html = open("index.html", encoding="utf-8").read()
+css = open("style.css", encoding="utf-8").read()
+physics = re.sub(r'(?m)^export\s+', '', open("physics.js", encoding="utf-8").read())
+app = re.sub(r'(?m)^import \* as P from "\./physics\.js";\n', '', open("app.js", encoding="utf-8").read())
+plotly = open("vendor/plotly.min.js", encoding="utf-8").read()
+names = ["CONST","MATERIALS","geometry","R_dc","skinDepth","skinCrossoverFreq","R_ac","L_tsv",
+         "C_ox","n_i","Vt","phi_F","R_max","C_dep_min","C_tsv_min","V_fb","V_th",
+         "C_tsv_of_V","elmoreDelay","dynamicPower","DEFAULT_PARAMS"]
+combined = physics + "\nconst P = { " + ", ".join(names) + " };\n" + app
+html = html.replace('<link rel="stylesheet" href="style.css" />', f"<style>\n{css}\n</style>")
+html = html.replace('<script src="vendor/plotly.min.js"></script>', f"<script>\n{plotly}\n</script>")
+html = html.replace('<script type="module" src="app.js"></script>', f"<script>\n{combined}\n</script>")
+open("tsv-rlc-simulator-standalone.html", "w", encoding="utf-8").write(html)
+PY
 ```
 
 Plotly.js(MIT license, v3.6.0)는 `vendor/plotly.min.js`에 오프라인으로 번들되어 있어
@@ -84,7 +114,8 @@ node test/validate.js
 
 ```
 rlc-simulator/
-├── index.html       # 탭형 대시보드 UI
+├── tsv-rlc-simulator-standalone.html  # 단일 파일 빌드 산출물 (서버 불필요, 이거 하나만 배포하면 됨)
+├── index.html       # 탭형 대시보드 UI (소스, ES 모듈)
 ├── style.css
 ├── app.js           # 슬라이더 → physics.js 호출 → Plotly 렌더링
 ├── physics.js        # 논문 수식 구현 (프레임워크 의존성 없는 순수 JS)
