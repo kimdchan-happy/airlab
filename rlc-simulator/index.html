@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TSV RLC Simulator — Katti et al. 2010 기반</title>
+<script src="vendor/plotly.min.js"></script>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header>
+  <h1>TSV RLC Simulator</h1>
+  <p class="subtitle">
+    G. Katti <em>et al.</em>, "Electrical Modeling and Characterization of Through Silicon Via for
+    Three-Dimensional ICs," <em>IEEE Trans. Electron Devices</em>, vol. 57, no. 1, pp. 256&ndash;262, 2010
+    &mdash; 공정 조건에 따른 R/L/C 변화를 인터랙티브하게 탐색합니다.
+  </p>
+</header>
+
+<div class="layout">
+  <aside id="controls">
+    <h2>TSV 공정 / 소자 파라미터</h2>
+
+    <div class="ctrl-group">
+      <h3>기하 구조</h3>
+      <label>TSV 직경 D<sub>TSV</sub> (μm)
+        <input type="range" id="D_tsv_um" min="0.5" max="20" step="0.1" value="5">
+        <span class="val" id="D_tsv_um_val"></span>
+      </label>
+      <label>산화막 라이너 두께 t<sub>ox</sub> (nm)
+        <input type="range" id="tox_nm" min="10" max="300" step="1" value="118.2">
+        <span class="val" id="tox_nm_val"></span>
+      </label>
+      <label>TSV 길이 l<sub>TSV</sub> (μm)
+        <input type="range" id="l_tsv_um" min="5" max="100" step="1" value="20">
+        <span class="val" id="l_tsv_um_val"></span>
+      </label>
+    </div>
+
+    <div class="ctrl-group">
+      <h3>재료 / 기판</h3>
+      <label>도체 재질
+        <select id="metal">
+          <option value="Cu">Cu (16.8 nΩ·m)</option>
+          <option value="W">W (52.8 nΩ·m)</option>
+        </select>
+      </label>
+      <label>기판 도핑 농도 N<sub>a</sub> (cm<sup>-3</sup>, log)
+        <input type="range" id="Na_log" min="14" max="18" step="0.05" value="15.301">
+        <span class="val" id="Na_log_val"></span>
+      </label>
+      <label>고정 산화막 전하 Q<sub>ot</sub> (cm<sup>-2</sup>, log)
+        <input type="range" id="Qot_log" min="9" max="12" step="0.05" value="11">
+        <span class="val" id="Qot_log_val"></span>
+      </label>
+      <label>온도 T (K)
+        <input type="range" id="T_K" min="250" max="400" step="1" value="300">
+        <span class="val" id="T_K_val"></span>
+      </label>
+    </div>
+
+    <div class="ctrl-group">
+      <h3>동작 조건</h3>
+      <label>신호 주파수 f (Hz, log)
+        <input type="range" id="freq_log" min="3" max="11" step="0.05" value="9">
+        <span class="val" id="freq_log_val"></span>
+      </label>
+      <label>V<sub>dd</sub> (V)
+        <input type="range" id="Vdd" min="0.5" max="1.8" step="0.05" value="1.0">
+        <span class="val" id="Vdd_val"></span>
+      </label>
+    </div>
+
+    <div class="ctrl-group">
+      <h3>Lumped 지연 모델 (Fig. 9)</h3>
+      <label>R<sub>dr</sub> (Ω)
+        <input type="range" id="Rdr" min="10" max="10000" step="10" value="2000">
+        <span class="val" id="Rdr_val"></span>
+      </label>
+      <label>R<sub>w_B</sub>, R<sub>w_T</sub> (Ω)
+        <input type="range" id="Rw" min="0" max="2000" step="10" value="200">
+        <span class="val" id="Rw_val"></span>
+      </label>
+      <label>C<sub>w_B</sub>, C<sub>w_T</sub> (fF)
+        <input type="range" id="Cw" min="0" max="50" step="0.5" value="5">
+        <span class="val" id="Cw_val"></span>
+      </label>
+      <label>C<sub>int</sub>, C<sub>ext</sub> (fF)
+        <input type="range" id="Cio" min="0" max="20" step="0.1" value="3">
+        <span class="val" id="Cio_val"></span>
+      </label>
+    </div>
+
+    <button id="resetBtn">기본값(논문 Fig.3)으로 초기화</button>
+    <div id="scorecard"></div>
+  </aside>
+
+  <main>
+    <nav id="tabs">
+      <button class="tab-btn active" data-tab="overview">개요</button>
+      <button class="tab-btn" data-tab="resistance">저항 &amp; Skin Effect</button>
+      <button class="tab-btn" data-tab="inductance">인덕턴스</button>
+      <button class="tab-btn" data-tab="capacitance">커패시턴스</button>
+      <button class="tab-btn" data-tab="cv">C-V 특성</button>
+      <button class="tab-btn" data-tab="delay">지연 &amp; 전력</button>
+      <button class="tab-btn" data-tab="sensitivity">민감도 분석</button>
+    </nav>
+
+    <section id="tab-overview" class="tab-panel active">
+      <h2>종합 대시보드</h2>
+      <p class="hint">현재 파라미터에서 계산된 R/L/C와, 주파수에 따라 R, ωL, 1/ωC 중 어떤 임피던스 성분이
+        지배적인지 한눈에 보여줍니다 (Fig. 8의 RLC → RC → C 근사가 타당한 영역을 시각적으로 확인).</p>
+      <div id="plot-bode" class="plot"></div>
+      <div id="plot-lumped-compare" class="plot"></div>
+    </section>
+
+    <section id="tab-resistance" class="tab-panel">
+      <h2>R<sub>TSV</sub>: DC 저항 &amp; Skin Effect</h2>
+      <p class="hint">Goldfarb–Pucel 근사(환형 도체 모델)로 skin depth가 도체 반경보다 작아지는 고주파에서
+        R<sub>AC</sub>가 증가합니다. 논문 예시(5μm/100nm liner → 738MHz, 2μm/50nm liner → 4.71GHz)와 대조 검증됨.</p>
+      <div id="plot-r-vs-f" class="plot"></div>
+      <div id="plot-r-vs-d" class="plot"></div>
+    </section>
+
+    <section id="tab-inductance" class="tab-panel">
+      <h2>L<sub>TSV</sub>: 부분 자기 인덕턴스</h2>
+      <p class="hint">Pucel 경험식 (Eq. 2). 5μm/20μm TSV에서 ~10pH로 논문과 일치. ωL이 R<sub>TSV</sub>를
+        넘어서는 교차 주파수도 함께 표시합니다.</p>
+      <div id="plot-l-heatmap" class="plot"></div>
+      <div id="plot-l-crossover" class="plot"></div>
+    </section>
+
+    <section id="tab-capacitance" class="tab-panel">
+      <h2>C<sub>TSV</sub>: 원통형 MOS 커패시턴스</h2>
+      <p class="hint">논문 Fig. 4/5/7 재현: C<sub>ox</sub> 및 C<sub>TSV_MIN</sub>이 직경·산화막 두께·도핑 농도에
+        따라 어떻게 변하는지 다각도로 확인합니다.</p>
+      <div id="plot-cox-surface" class="plot"></div>
+      <div id="plot-cmin-surface" class="plot"></div>
+      <div id="plot-c-vs-tox" class="plot"></div>
+      <div id="plot-c-vs-doping" class="plot"></div>
+    </section>
+
+    <section id="tab-cv" class="tab-panel">
+      <h2>C-V 특성 (축적 / 공핍 / 최소공핍)</h2>
+      <p class="hint">TSV 게이트 전압에 따른 C(V) 곡선. V<sub>FB</sub>, V<sub>Th</sub>를 함께 표시하며,
+        도핑/산화막두께/고정전하를 바꿔가며 곡선 이동을 관찰할 수 있습니다.</p>
+      <div id="plot-cv" class="plot"></div>
+    </section>
+
+    <section id="tab-delay" class="tab-panel">
+      <h2>Elmore 지연 &amp; 동적 전력 (Fig. 9/10)</h2>
+      <p class="hint">C<sub>TSV</sub>가 지연에 지배적이고 R<sub>TSV</sub> 영향은 작다는 논문의 결론을
+        재현합니다. 지연은 R<sub>TSV</sub>·C<sub>TSV</sub>의 함수로, 전력은 C<sub>TSV</sub>V<sub>dd</sub><sup>2</sup>f로 계산됩니다.</p>
+      <div id="plot-delay-heatmap" class="plot"></div>
+      <div id="plot-power" class="plot"></div>
+    </section>
+
+    <section id="tab-sensitivity" class="tab-panel">
+      <h2>공정 파라미터 민감도 (Tornado Chart)</h2>
+      <p class="hint">기준 조건에서 각 공정 파라미터를 ±20% 변화시켰을 때 R, L, C가 얼마나 민감하게
+        반응하는지 한눈에 비교합니다.</p>
+      <div id="plot-tornado-r" class="plot"></div>
+      <div id="plot-tornado-l" class="plot"></div>
+      <div id="plot-tornado-c" class="plot"></div>
+    </section>
+  </main>
+</div>
+
+<footer>
+  <p>모든 수식과 파라미터 정의는 <code>physics.js</code>와 README에 문서화되어 있으며,
+     <code>test/validate.js</code>로 논문 본문에 언급된 수치(738MHz, 4.71GHz, 10pH, 18mΩ 등)와 대조 검증되었습니다.</p>
+</footer>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
